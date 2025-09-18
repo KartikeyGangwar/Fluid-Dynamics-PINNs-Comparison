@@ -8,4 +8,4 @@ This repository is under active development.
 *   Phase 3: Comparative Analysis - In Progress
 
 ## Burger's Equation
-The code for solving the 1D Viscous Burger's Equation is now available in the `src/` directory.
+The code for solving the 1D Viscous Burger's and Navier-Stokes Equation is now available in the `src/` directory.
