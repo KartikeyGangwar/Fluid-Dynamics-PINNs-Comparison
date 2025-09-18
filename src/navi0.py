@@ -27,9 +27,9 @@ class NN(nn.Module):
         self.layers.append(nn.Linear(neurons_per_layer, output_size))
 
     def forward(self, x, y, t):
-        input = torch.cat((x, y, t), dim=1)
+        input = torch.cat((x, y, t), dim=1) #combined all input x, y, t values in one tensor
         for layer in self.layers:
-            input = layer(input)
+            input = layer(input) #input of nth layer after passing through it as an output becomes the input of (n+1)th layer
         u = input[:, 0:1] #velocity in x direction
         v = input[:, 1:2] #velocity in y direction
         p = input[:, 2:3] #pressure
@@ -199,4 +199,5 @@ for epoch in range (epochs):
     if epoch % 500 == 0:
         print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f} Loss % decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%')
     
+
 print(f"Loss at epoch {epoch} : {loss_history[-1]} and % Loss decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%")
