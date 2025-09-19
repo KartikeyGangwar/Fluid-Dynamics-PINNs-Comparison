@@ -40,7 +40,7 @@ model = NN(input_size=3, output_size=3, hidden_layers=4, neurons_per_layer=30).t
 
 epochs = 10000
 collocation_points = 10000
-learning_rate = 0.0001
+learning_rate = 0.00001
 
 re = 100  #Reynolds number
 g_x = 0.0 #external force in x direction
@@ -48,7 +48,7 @@ g_y = 0.0 #external force in y direction
 
 loss_function = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), learning_rate)
-learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=200, factor=0.5)
+learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=200, factor=0.2)
 
 lambda_x = 1.0 #x-momentum loss weight
 lambda_y = 1.0 #y-momentum loss weight
@@ -172,25 +172,26 @@ def total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc):
 
     loss_bc_0 = bc_fn_0() #loss for left, right, bottom wall boundary condition
     loss_bc_1 = bc_fn_1() #loss for top wall boundary condition
+    loss_bc = loss_bc_1 + loss_bc_0
     
     mse_x = loss_function(residual_x, torch.zeros_like(residual_x)) #loss for x-momentum
     mse_y = loss_function(residual_y, torch.zeros_like(residual_y)) #loss for y-momentum
     mse_c = loss_function(residual_c, torch.zeros_like(residual_c)) #loss for continuity equation
 
-    total_loss = (lambda_x*mse_x + lambda_y*mse_y + lambda_c*mse_c +lambda_ic*loss_ic + lambda_bc*(loss_bc_0 + loss_bc_1)) #total loss
+    total_loss = (lambda_x*mse_x + lambda_y*mse_y + lambda_c*mse_c +lambda_ic*loss_ic + lambda_bc*loss_bc) #total loss
 
-    return total_loss
+    return total_loss, loss_bc, loss_ic
 
 loss_history = [] #stored list of loss values
 
 for epoch in range (epochs):
     optimizer.zero_grad() #set gradients to zero
-
-    total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc) #calculate total loss
+    
+    total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
     total_loss.backward(retain_graph=True) #backpropagation
     optimizer.step() #update weights
 
-    nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
+    nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
 
     learning_rate_scheduler.step(total_loss) #update learning rate based on loss
     loss_history.append(total_loss.item()) #store loss value in list
@@ -198,6 +199,70 @@ for epoch in range (epochs):
     
     if epoch % 500 == 0:
         print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f} Loss % decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%')
+        print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
     
-
 print(f"Loss at epoch {epoch} : {loss_history[-1]} and % Loss decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%")
+
+
+###### visualization #####
+#plotting grid according to domain [-1,1] for x,y
+x = np.linspace(-1, 1, 20)
+y = np.linspace(-1, 1, 20)
+X, Y = np.meshgrid(x, y)
+x_flat = X.flatten()
+y_flat = Y.flatten()
+t_fixed = 0.5  # Fixed time
+
+#transfer inputs to GPU
+inputs_x = torch.tensor(x_flat.reshape(-1, 1), dtype=torch.float32, device=device)
+inputs_y = torch.tensor(y_flat.reshape(-1, 1), dtype=torch.float32, device=device) 
+inputs_t = torch.full_like(inputs_x, t_fixed)  # Same time for all points
+
+#output predictions
+model.eval()
+with torch.no_grad():
+    u_n_pred, v_n_pred, p_n_pred = model(inputs_x, inputs_y, inputs_t)
+    
+    #from GPU to CPU predected data transfer, them transformed tensor to array using numpy
+    u_n_plot = u_n_pred.cpu().numpy().reshape(20, 20)
+    v_n_plot = v_n_pred.cpu().numpy().reshape(20, 20)
+    p_n_plot = p_n_pred.cpu().numpy().reshape(20, 20)
+
+# 4. Plotting
+plt.figure(figsize=(15, 5))
+
+# Velocity Plot
+plt.subplot(1, 3, 1)
+plt.quiver(X, Y, u_n_plot, v_n_plot, scale=30, color='blue')
+plt.title('Velocity Field (u_n, v_n)')
+plt.xlabel('X')
+plt.ylabel('Y')
+
+# Pressure Plot
+plt.subplot(1, 3, 2)
+contour = plt.contourf(X, Y, p_n_plot, levels=50, cmap='viridis')
+plt.colorbar(contour, label='Pressure (p_n)')
+plt.title('Pressure Contour')
+plt.xlabel('X')
+plt.ylabel('Y')
+
+# Streamlines Plot
+plt.subplot(1, 3, 3)
+plt.streamplot(X, Y, u_n_plot, v_n_plot, color='black', linewidth=1, density=2)
+plt.title('Streamlines')
+plt.xlabel('X')
+plt.ylabel('Y')
+
+plt.tight_layout()
+plt.savefig('navier_stokes_results.png') #image save
+plt.show()
+
+# Loss Curve plot
+plt.figure()
+plt.plot(loss_history)
+plt.yscale('log')  #log scale for better visualization
+plt.title('Training Loss Curve')
+plt.xlabel('Epoch')
+plt.ylabel('Loss (log scale)')
+plt.savefig('loss_curve.png')
+plt.show()
