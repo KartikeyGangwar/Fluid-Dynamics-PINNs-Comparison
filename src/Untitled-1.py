@@ -124,104 +124,81 @@ for epoch in range(epochs):
 print (f'Loss at final epoch {epoch} : {loss_history[-1]:.6f} and loss % decrease : {((loss_history[0]-loss_history[-1])/loss_history[0])*100:.2f}%')
 
 
-# Post-Training Analysis and Visualization (Rough)
-plt.figure(figsize=(12, 6))
-plt.subplot(1, 2, 1)
+###### visualization #####
+#creating a grid space for visualization
+x_vis = np.linspace(-1, 1, 100)  # 100 points in space
+t_vis = np.linspace(0, 1, 100)    # 100 points in time
+X_vis, T_vis = np.meshgrid(x_vis, t_vis)
+
+#flatten the grid for model input
+x_vis_flat = X_vis.flatten()
+t_vis_flat = T_vis.flatten()
+
+# 2. Convert to tensor and move to device
+inputs_x = torch.tensor(x_vis_flat.reshape(-1, 1), dtype=torch.float32, device=device)
+inputs_t = torch.tensor(t_vis_flat.reshape(-1, 1), dtype=torch.float32, device=device)
+
+# 3. Get predictions from model
+model.eval()
+with torch.no_grad():
+    # Combine inputs and get predictions
+    inputs_combined = torch.cat((inputs_x, inputs_t), dim=1)
+    u_pred = model(inputs_combined)
+    
+    # Move to CPU and convert to numpy
+    u_plot = u_pred.cpu().numpy().reshape(100, 100)
+
+# 4. Create the plot
+plt.figure(figsize=(12, 8))
+
+# Heatmap plot
+plt.subplot(2, 2, 1)
+heatmap = plt.pcolormesh(X_vis, T_vis, u_plot, shading='auto', cmap='viridis')
+plt.colorbar(heatmap, label='Velocity u(x,t)')
+plt.title('Burgers Equation: u(x,t) Heatmap')
+plt.xlabel('Space (x)')
+plt.ylabel('Time (t)')
+
+# Initial condition at t=0
+plt.subplot(2, 2, 2)
+t0_index = 0  # First time step (t=0)
+plt.plot(x_vis, u_plot[t0_index, :], 'r-', linewidth=2)
+plt.title('Initial Condition: u(x,0) = -sin(πx)')
+plt.xlabel('Space (x)')
+plt.ylabel('Velocity u(x,0)')
+plt.grid(True)
+
+# Final solution at t=1
+plt.subplot(2, 2, 3)
+t1_index = -1  # Last time step (t=1)
+plt.plot(x_vis, u_plot[t1_index, :], 'b-', linewidth=2)
+plt.title('Final Solution: u(x,1)')
+plt.xlabel('Space (x)')
+plt.ylabel('Velocity u(x,1)')
+plt.grid(True)
+
+# 3D surface plot
+plt.subplot(2, 2, 4, projection='3d')
+ax = plt.gca()  # current axis (which is 3D)
+surf = ax.plot_surface(X_vis, T_vis, u_plot, cmap='viridis', 
+                       edgecolor='none', alpha=0.8)
+plt.colorbar(surf, ax=ax, shrink=0.5, label='Velocity u(x,t)')
+ax.set_title('3D Surface: u(x,t)')
+ax.set_xlabel('Space (x)')
+ax.set_ylabel('Time (t)')
+ax.set_zlabel('Velocity u(x,t)')
+
+plt.tight_layout()
+plt.savefig('burgers_equation_results.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# 5. Plot training loss
+plt.figure(figsize=(10, 5))
 plt.plot(loss_history)
-plt.title('Training Loss')
+plt.yscale('log')  # log scale for better visualization
+plt.title('Training Loss History')
 plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.yscale('log')  # Log scale for better visualization
-
-plt.subplot(1, 2, 2)
-plt.plot(loss_history[-1000:])  # Last 1000 epochs
-plt.title('Final Training Loss')
-plt.xlabel('Epoch (last 1000)')
-plt.ylabel('Loss')
-plt.tight_layout()
+plt.ylabel('Loss (log scale)')
+plt.grid(True)
+plt.savefig('burgers_training_loss.png', dpi=300, bbox_inches='tight')
 plt.show()
-
-# 3. Test predictions at different times
-def test_model_at_time(t_value):
-    x_test = torch.linspace(-1, 1, 1000).view(-1, 1).to(device)
-    t_test = t_value * torch.ones_like(x_test).to(device)
-    
-    with torch.no_grad():
-        inputs = torch.cat((x_test, t_test), dim=1)
-        u_pred = model(inputs)
-    
-    return x_test, u_pred
-
-
-times_to_test = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-plt.figure(figsize=(15, 10))
-
-for i, t_val in enumerate(times_to_test):
-    x_test, u_pred = test_model_at_time(t_val)
-    
-    plt.subplot(2, 3, i+1)
-    plt.plot(x_test.cpu().numpy(), u_pred.cpu().numpy(), 'b-', linewidth=2)
-    plt.title(f't = {t_val}')
-    plt.xlabel('x')
-    plt.ylabel('u(x,t)')
-    plt.ylim(-1.2, 1.2)
-    plt.grid(True)
-
-plt.tight_layout()
-plt.suptitle('Burgers Equation Solutions at Different Times', fontsize=16)
-plt.show()
-
-# 4. 3D Surface Plot
-def plot_3d_surface():
-    x = torch.linspace(-1, 1, 100).to(device)
-    t = torch.linspace(0, 1, 100).to(device)
-    X, T = torch.meshgrid(x, t, indexing='xy')
-    
-    with torch.no_grad():
-        inputs = torch.stack([X.flatten(), T.flatten()], dim=1)
-        U = model(inputs).reshape(X.shape)
-    
-    fig = plt.figure(figsize=(12, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    surf = ax.plot_surface(X.cpu().numpy(), T.cpu().numpy(), U.cpu().numpy(), 
-                          cmap='viridis', alpha=0.8)
-    
-    ax.set_xlabel('x')
-    ax.set_ylabel('t')
-    ax.set_zlabel('u(x,t)')
-    ax.set_title('Burgers Equation Solution Surface')
-    fig.colorbar(surf)
-    plt.show()
-
-
-try:
-    plot_3d_surface()
-except:
-    print("3D plotting not available. Install: pip install matplotlib --upgrade")
-
-# 5. Error Analysis
-def calculate_errors():
-    x_test = torch.linspace(-1, 1, 1000).view(-1, 1).to(device)
-    t_test = torch.rand(1000, 1).to(device) * 1.0
-    
-    with torch.no_grad():
-        inputs = torch.cat((x_test, t_test), dim=1)
-        u_pred = model(inputs)
-        
-        errors = torch.abs(u_pred)  # Placeholder - actual error calculation
-    
-    plt.figure(figsize=(10, 6))
-    plt.hist(errors.cpu().numpy(), bins=50, alpha=0.7)
-    plt.title('Prediction Error Distribution')
-    plt.xlabel('Error')
-    plt.ylabel('Frequency')
-    plt.grid(True)
-    plt.show()
-
-calculate_errors()
-
-# plt.plot(loss_history)
-# plt.title("Training Loss Curve")
-# plt.xlabel("Epochs")
-# plt.ylabel("Loss")
-# plt.show()
