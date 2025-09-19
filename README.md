@@ -7,4 +7,7 @@ This repository is under active development.
 *   Phase 2: Navier-Stokes Equation - **COMPLETED** 
 *   Phase 3: Comparative Analysis - In Progress
 
+For solving we took, initial condition as y(x,0) = -sin(pi*x) & Dirichlet boundary condition for Burgers' equation.
+                   , lid cavity experiment conditions for Navier-Stokes Equation.
+
 The code for solving the 1D Viscous Burger's and Navier-Stokes Equation is now available in the `src/` directory.
