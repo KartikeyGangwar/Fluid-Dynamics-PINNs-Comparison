@@ -18,11 +18,11 @@ class NN(nn.Module):
         self.layers = nn.ModuleList()
 
         self.layers.append(nn.Linear(input_size, neurons_per_layer))
-        self.layers.append(nn.Tanh())
+        self.layers.append(nn.SiLU())
 
         for _ in range (hidden_layers - 1):
             self.layers.append(nn.Linear(neurons_per_layer, neurons_per_layer))
-            self.layers.append(nn.Tanh())
+            self.layers.append(nn.SiLU())
         
         self.layers.append(nn.Linear(neurons_per_layer, output_size))
 
@@ -39,10 +39,10 @@ class NN(nn.Module):
 model = NN(input_size=3, output_size=3, hidden_layers=4, neurons_per_layer=30).to(device)
 
 epochs = 10000
-collocation_points = 10000
+collocation_points = 100000
 learning_rate = 0.0001
 
-re = 100  #Reynolds number
+re = 400  #Reynolds number
 g_x = 0.0 #external force in x direction
 g_y = 0.0 #external force in y direction
 
@@ -50,11 +50,11 @@ loss_function = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), learning_rate)
 learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=200, factor=0.2)
 
-lambda_x = 1.0 #x-momentum loss weight
-lambda_y = 1.0 #y-momentum loss weight
-lambda_c = 1.0 #continuity equation loss weight
-lambda_ic = 10.0 #initial condition loss weight
-lambda_bc = 10.0  #boundary condition loss weight
+lambda_x = 5.0 #x-momentum loss weight
+lambda_y = 5.0 #y-momentum loss weight
+lambda_c = 3.0 #continuity equation loss weight
+lambda_ic = 2.0 #initial condition loss weight
+lambda_bc = 2.0  #boundary condition loss weight
 
 
 ##### initial condition #####
@@ -172,29 +172,14 @@ def navier_stokes_residuals(x_n, y_n, t_n, re, g_x, g_y):
 
     return residual_x, residual_y, residual_c
 
-#boundary and initial condition loss function
-def bc_ic_loss_function(lambda_ic, lambda_bc):
-    
-    #loss for initial condition
-    loss_ic = ic_fn(x_ic, t_ic, y_ic, u_ic_true, v_ic_true)
-
-    #boundary condition loss
-    loss_bc_0 = bc_fn_0(t_bc_0, y_bc_0, x_bc_0, v_bc_0_true, u_bc_0_true) #loss for left, right, bottom wall
-    loss_bc_1 = bc_fn_1(x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true) #loss for top wall
-    loss_bc = loss_bc_0 +loss_bc_1
-
-    bc_ic_loss = lambda_ic*loss_ic + lambda_bc*loss_bc
-
-    return bc_ic_loss, loss_bc, loss_ic
-
 # Total Loss Function
 def total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc):
 
     residual_x, residual_y, residual_c = navier_stokes_residuals(x_n, y_n, t_n, re, g_x, g_y)
     
-    loss_ic = ic_fn(x_ic, t_ic, y_ic, u_ic_true, v_ic_true) #loss for initial condition
+    loss_ic = ic_fn(x_ic, y_ic, t_ic, u_ic_true, v_ic_true) #loss for initial condition
 
-    loss_bc_0 = bc_fn_0(t_bc_0, y_bc_0, x_bc_0, v_bc_0_true, u_bc_0_true) #loss for left, right, bottom wall boundary condition
+    loss_bc_0 = bc_fn_0(x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true) #loss for left, right, bottom wall boundary condition
     loss_bc_1 = bc_fn_1(x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true) #loss for top wall boundary condition
     loss_bc = loss_bc_1 + loss_bc_0
     
@@ -210,39 +195,49 @@ loss_history = [] #stored list of loss values
 
 #using Curriculum training approach
 for epoch in range (epochs):
-    if epoch < 2000: #first 2000 epochs only training with boundary and initial conditions for better model learning
+    if epoch < 1000: #first 2000 epochs only training with boundary and initial conditions for better model learning
         optimizer.zero_grad() #set gradients to zero
 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 0.0, 0.0, 0.0, 10.0, 20.0
-
-        bc_ic_loss = bc_ic_loss_function(lambda_ic, lambda_bc)[0] #calculate boundary and initial conditions loss
-        bc_ic_loss.backward(retain_graph=True) #backpropagation
-        optimizer.step() #update weights
-
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
-
-        loss_history.append(bc_ic_loss.item()) #storing bc and ic loss value in list
-
-        if epoch % 500 == 0:
-            print(f'Boundary condition loss at epoch {epoch} : {bc_ic_loss_function(lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {bc_ic_loss_function(lambda_ic, lambda_bc)[2]:.6f}')
-
-    else:
-        optimizer.zero_grad() #set gradients to zero
-        
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 1.0, 1.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 10.0, 10.0, 5.0, 0.1, 0.1
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
         optimizer.step() #update weights
 
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
+        learning_rate_scheduler.step(total_loss)
+        loss_history.append(total_loss.item()) #store loss value in list
+
+        if epoch % 500 == 0:
+            print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
+    elif epoch < 3000:
+        optimizer.zero_grad() #set gradients to zero
+
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 5.0, 5.0
+
+        total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
+        total_loss.backward(retain_graph=True) #backpropagation
+        optimizer.step() #update weights
+
+        learning_rate_scheduler.step(total_loss)
+        loss_history.append(total_loss.item()) #store loss value in list
+
+        if epoch % 500 == 0:
+            print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
+    else:
+        optimizer.zero_grad() #set gradients to zero
+        
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 2.0, 2.0, 1.0, 2.0, 2.0
+
+        total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
+        total_loss.backward(retain_graph=True) #backpropagation
+        optimizer.step() #update weights
 
         learning_rate_scheduler.step(total_loss) #update learning rate based on loss
         loss_history.append(total_loss.item()) #store loss value in list
         learning_rate_scheduler.get_last_lr()[0]
         
         if epoch % 500 == 0:
-            print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f} Loss % decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%')
+            print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f}')
             print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
     
 print(f"Loss at epoch {epoch} : {loss_history[-1]} and % Loss decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%")
@@ -250,12 +245,12 @@ print(f"Loss at epoch {epoch} : {loss_history[-1]} and % Loss decrease : {(loss_
 
 ###### visualization #####
 #plotting grid according to domain [-1,1] for x,y
-x = np.linspace(-1, 1, 20)
-y = np.linspace(-1, 1, 20)
+x = np.linspace(-1, 1, 50)
+y = np.linspace(-1, 1, 50)
 X, Y = np.meshgrid(x, y)
 x_flat = X.flatten()
 y_flat = Y.flatten()
-t_fixed = 0.5  # Fixed time
+t_fixed = 0.8  # Fixed time
 
 #transfer inputs to GPU
 inputs_x = torch.tensor(x_flat.reshape(-1, 1), dtype=torch.float32, device=device)
@@ -268,9 +263,9 @@ with torch.no_grad():
     u_n_pred, v_n_pred, p_n_pred = model(inputs_x, inputs_y, inputs_t)
     
     #from GPU to CPU predected data transfer, them transformed tensor to array using numpy
-    u_n_plot = u_n_pred.cpu().numpy().reshape(20, 20)
-    v_n_plot = v_n_pred.cpu().numpy().reshape(20, 20)
-    p_n_plot = p_n_pred.cpu().numpy().reshape(20, 20)
+    u_n_plot = u_n_pred.cpu().numpy().reshape(50, 50)
+    v_n_plot = v_n_pred.cpu().numpy().reshape(50, 50)
+    p_n_plot = p_n_pred.cpu().numpy().reshape(50, 50)
 
 # 4. Plotting
 plt.figure(figsize=(15, 5))
