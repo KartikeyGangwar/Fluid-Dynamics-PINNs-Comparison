@@ -40,7 +40,7 @@ model = NN(input_size=3, output_size=3, hidden_layers=4, neurons_per_layer=30).t
 
 epochs = 10000
 collocation_points = 10000
-learning_rate = 0.00001
+learning_rate = 0.0001
 
 re = 100  #Reynolds number
 g_x = 0.0 #external force in x direction
@@ -57,15 +57,19 @@ lambda_ic = 10.0 #initial condition loss weight
 lambda_bc = 10.0  #boundary condition loss weight
 
 
-#initial condition 
-def ic_fn():
-    x_ic = torch.rand(100,1, device=device)
-    y_ic = torch.rand(100,1, device=device)
-    t_ic = torch.zeros(100,1, device=device)
+##### initial condition #####
 
-    u_ic_true = torch.zeros(100,1, device=device) #true initial condition value for u
-    v_ic_true = torch.zeros(100,1, device=device) #true initial condition value for v
+#initial condition dataset
+x_ic = torch.rand(100,1, requires_grad = True, device=device)*2 - 1
+y_ic = torch.rand(100,1, requires_grad = True, device=device)*2 - 1
+t_ic = torch.zeros(100,1, requires_grad = True, device=device)
 
+u_ic_true = torch.zeros(100,1, device=device) #true initial condition value for u
+v_ic_true = torch.zeros(100,1, device=device) #true initial condition value for v
+
+#initial condition loss
+def ic_fn(x_ic, y_ic, t_ic, u_ic_true, v_ic_true):
+  
     u_ic_pred, v_ic_pred, p_ic_pred = model(x_ic, y_ic, t_ic) #predicted initial condition values
 
     loss_ic = loss_function(u_ic_pred, u_ic_true) + loss_function(v_ic_pred, v_ic_true) #initial condition loss
@@ -74,43 +78,50 @@ def ic_fn():
 
 ###### boundary condition ######
 
-def bc_fn_0():
+#left wall condition dataset
+x_bc_left = -torch.ones(100,1, requires_grad = True, device=device) #x=-1
+y_bc_left = torch.rand(100,1, requires_grad = True, device=device)*2-1 #y values between -1 and 1
+t_bc_left = torch.rand(100, 1, requires_grad=True, device=device)
 
-    #left wall condition
-    x_bc_left = -torch.ones(100,1, device=device) #x=-1
-    y_bc_left = torch.rand(100,1, device=device)*2-1 #y values between -1 and 1
+#right wall condition dataset
+x_bc_right = torch.ones(100,1, requires_grad = True, device=device) #x=1
+y_bc_right = torch.rand(100,1, requires_grad = True, device=device)*2-1 #y values between -1 and 1
+t_bc_right = torch.rand(100, 1, requires_grad=True, device=device)
 
-    #right wall condition
-    x_bc_right = torch.ones(100,1, device=device) #x=1
-    y_bc_right = torch.rand(100,1, device=device)*2-1 #y values between -1 and 1
+#bottom wall condition dataset
+x_bc_bottom = torch.rand(100,1, requires_grad = True, device=device)*2-1 #x values between -1 and 1
+y_bc_bottom = -torch.ones(100,1, requires_grad = True, device=device) #y=-1
+t_bc_bottom = torch.rand(100, 1, requires_grad=True, device=device)
 
-    #bottom wall condition
-    x_bc_bottom = torch.rand(100,1, device=device)*2-1 #x values between -1 and 1
-    y_bc_bottom = -torch.ones(100,1, device=device) #y=-1
+#left, right, bottom wall condition true values dataset
+u_bc_0_true = torch.zeros(300,1, requires_grad = True, device=device) #true boundary condition value for u
+v_bc_0_true = torch.zeros(300,1, requires_grad = True, device=device) #true boundary condition value for v
 
-    x_bc_0 = torch.cat((x_bc_left, x_bc_right, x_bc_bottom), dim=0) #combined x values at boundary conditions
-    y_bc_0 = torch.cat((y_bc_left, y_bc_right, y_bc_bottom), dim=0) #combined y values at boundary conditions
-    t_bc_0 = torch.rand(300,1, device=device) #t values between 0 and 1
+x_bc_0 = torch.cat((x_bc_left, x_bc_right, x_bc_bottom), dim=0) #combined x values at boundary conditions
+y_bc_0 = torch.cat((y_bc_left, y_bc_right, y_bc_bottom), dim=0) #combined y values at boundary conditions
+t_bc_0 = torch.cat((t_bc_left, t_bc_right, t_bc_bottom), dim=0) #t values between 0 and 1
 
-    u_bc_0_true = torch.zeros(300,1, device=device) #true boundary condition value for u
-    v_bc_0_true = torch.zeros(300,1, device=device) #true boundary condition value for v
-    u_bc_0_pred, v_bc_0_pred, p_bc_0_pred = model(x_bc_0, y_bc_0, t_bc_0) #predicted boundary condition values
+#left, right, bottom boundary condition loss
+def bc_fn_0(x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true):
+
+    u_bc_0_pred, v_bc_0_pred, p_bc_0_pred = model(x_bc_0, y_bc_0, t_bc_0) #left, right, bottom wall condition boundary condition predicted values
 
     loss_bc_0 = loss_function(u_bc_0_pred, u_bc_0_true) + loss_function(v_bc_0_pred, v_bc_0_true) #boundary condition loss
     
     return loss_bc_0
 
-def bc_fn_1():
-    
-    #top wall condition
-    x_bc_bottom = torch.rand(100,1, device=device)*2-1 #x values between -1 and 1
-    y_bc_bottom = torch.ones(100,1, device=device) #y=1
-    t_bc_bottom = torch.rand(100,1, device=device) #t values between 0 and 1
+#top wall condition dataset
+x_bc_top = torch.rand(100,1, requires_grad = True, device=device)*2-1 #x values between -1 and 1
+y_bc_top = torch.ones(100,1, requires_grad = True, device=device) #y=1
+t_bc_top = torch.rand(100,1, requires_grad = True, device=device) #t values between 0 and 1
 
-    u_bc_1_true = torch.ones(100,1).to(device) #true boundary condition value
-    v_bc_1_true = torch.zeros(100,1).to(device) #true boundary condition value
+u_bc_1_true = torch.ones(100,1, requires_grad = True, device=device) #true boundary condition value
+v_bc_1_true = torch.zeros(100,1, requires_grad = True, device=device) #true boundary condition value
 
-    u_bc_1_pred, v_bc_1_pred, p_bc_1_pred = model(x_bc_bottom, y_bc_bottom, t_bc_bottom) #predicted boundary condition value
+#top boundary condition loss
+def bc_fn_1(x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true):
+
+    u_bc_1_pred, v_bc_1_pred, p_bc_1_pred = model(x_bc_top, y_bc_top, t_bc_top) #top wall boundary condition predicted value
 
     loss_bc_1 = loss_function(u_bc_1_pred, u_bc_1_true) + loss_function(v_bc_1_pred, v_bc_1_true) #boundary condition loss
 
@@ -118,35 +129,35 @@ def bc_fn_1():
 
 
 #collocation points dataset
-x_n = torch.rand(collocation_points, 1,requires_grad = True, device=device) #x space values
-y_n = torch.rand(collocation_points, 1,requires_grad = True, device=device) #y space values
+x_n = torch.rand(collocation_points, 1,requires_grad = True, device=device)*2 - 1 #x space values
+y_n = torch.rand(collocation_points, 1,requires_grad = True, device=device)*2 - 1 #y space values
 t_n = torch.rand(collocation_points, 1,requires_grad = True, device=device) #t values
-
-u_n, v_n, p_n = model(x_n , y_n, t_n) #predicted velocity, pressure values
 
 #gradient computation function
 def gradients(u_n, v_n, p_n, x_n, y_n, t_n):
 
     #gradients for x-momentium
-    du_dt = torch.autograd.grad(u_n, t_n, torch.ones_like(u_n), create_graph=True)[0]
-    du_dx = torch.autograd.grad(u_n, x_n, torch.ones_like(u_n), create_graph=True)[0]
-    du_dy = torch.autograd.grad(u_n, y_n, torch.ones_like(u_n), create_graph=True)[0]
-    dp_dx = torch.autograd.grad(p_n, x_n, torch.ones_like(p_n), create_graph=True)[0]
-    d2u_dx2 = torch.autograd.grad(du_dx, x_n, torch.ones_like(du_dx), create_graph=True)[0]
-    d2u_dy2 = torch.autograd.grad(du_dy, y_n, torch.ones_like(du_dy), create_graph=True)[0]
+    du_dt = torch.autograd.grad(u_n, t_n, torch.ones_like(u_n), create_graph=True, retain_graph=True)[0]
+    du_dx = torch.autograd.grad(u_n, x_n, torch.ones_like(u_n), create_graph=True, retain_graph=True)[0]
+    du_dy = torch.autograd.grad(u_n, y_n, torch.ones_like(u_n), create_graph=True, retain_graph=True)[0]
+    dp_dx = torch.autograd.grad(p_n, x_n, torch.ones_like(p_n), create_graph=True, retain_graph=True)[0]
+    d2u_dx2 = torch.autograd.grad(du_dx, x_n, torch.ones_like(du_dx), create_graph=True, retain_graph=True)[0]
+    d2u_dy2 = torch.autograd.grad(du_dy, y_n, torch.ones_like(du_dy), create_graph=True, retain_graph=True)[0]
 
     #gradients for y-momentium
-    dv_dt = torch.autograd.grad(v_n, t_n, torch.ones_like(v_n), create_graph=True)[0]
-    dv_dx = torch.autograd.grad(v_n, x_n, torch.ones_like(v_n), create_graph=True)[0]
-    dv_dy = torch.autograd.grad(v_n, y_n, torch.ones_like(v_n), create_graph=True)[0]
-    dp_dy = torch.autograd.grad(p_n, y_n, torch.ones_like(p_n), create_graph=True)[0]
-    d2v_dx2 = torch.autograd.grad(dv_dx, x_n, torch.ones_like(dv_dx), create_graph=True)[0]
-    d2v_dy2 = torch.autograd.grad(dv_dy, y_n, torch.ones_like(dv_dy), create_graph=True)[0]
+    dv_dt = torch.autograd.grad(v_n, t_n, torch.ones_like(v_n), create_graph=True, retain_graph=True)[0]
+    dv_dx = torch.autograd.grad(v_n, x_n, torch.ones_like(v_n), create_graph=True, retain_graph=True)[0]
+    dv_dy = torch.autograd.grad(v_n, y_n, torch.ones_like(v_n), create_graph=True, retain_graph=True)[0]
+    dp_dy = torch.autograd.grad(p_n, y_n, torch.ones_like(p_n), create_graph=True, retain_graph=True)[0]
+    d2v_dx2 = torch.autograd.grad(dv_dx, x_n, torch.ones_like(dv_dx), create_graph=True, retain_graph=True)[0]
+    d2v_dy2 = torch.autograd.grad(dv_dy, y_n, torch.ones_like(dv_dy), create_graph=True, retain_graph=True)[0]
 
     return du_dt, du_dx, du_dy, dp_dx, d2u_dx2, d2u_dy2, dv_dt, dv_dx, dv_dy, dp_dy, d2v_dx2, d2v_dy2
 
 ##### Navier-Stokes equations #####
-def navier_stokes_residuals(u_n, v_n, p_n, x_n, y_n, t_n, re, g_x, g_y):
+def navier_stokes_residuals(x_n, y_n, t_n, re, g_x, g_y):
+
+    u_n, v_n, p_n = model(x_n , y_n, t_n) #predicted velocity, pressure values
 
     du_dt, du_dx, du_dy, dp_dx, d2u_dx2, d2u_dy2, dv_dt, dv_dx, dv_dy, dp_dy, d2v_dx2, d2v_dy2 = gradients(u_n, v_n, p_n, x_n, y_n, t_n)
 
@@ -161,17 +172,30 @@ def navier_stokes_residuals(u_n, v_n, p_n, x_n, y_n, t_n, re, g_x, g_y):
 
     return residual_x, residual_y, residual_c
 
+#boundary and initial condition loss function
+def bc_ic_loss_function(lambda_ic, lambda_bc):
+    
+    #loss for initial condition
+    loss_ic = ic_fn(x_ic, t_ic, y_ic, u_ic_true, v_ic_true)
+
+    #boundary condition loss
+    loss_bc_0 = bc_fn_0(t_bc_0, y_bc_0, x_bc_0, v_bc_0_true, u_bc_0_true) #loss for left, right, bottom wall
+    loss_bc_1 = bc_fn_1(x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true) #loss for top wall
+    loss_bc = loss_bc_0 +loss_bc_1
+
+    bc_ic_loss = lambda_ic*loss_ic + lambda_bc*loss_bc
+
+    return bc_ic_loss, loss_bc, loss_ic
+
 # Total Loss Function
 def total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc):
 
-    u_n, v_n, p_n = model(x_n , y_n, t_n) #predicted velocity, pressure values
-
-    residual_x, residual_y, residual_c = navier_stokes_residuals(u_n, v_n, p_n, x_n, y_n, t_n, re, g_x, g_y)
+    residual_x, residual_y, residual_c = navier_stokes_residuals(x_n, y_n, t_n, re, g_x, g_y)
     
-    loss_ic = ic_fn() #loss for initial condition
+    loss_ic = ic_fn(x_ic, t_ic, y_ic, u_ic_true, v_ic_true) #loss for initial condition
 
-    loss_bc_0 = bc_fn_0() #loss for left, right, bottom wall boundary condition
-    loss_bc_1 = bc_fn_1() #loss for top wall boundary condition
+    loss_bc_0 = bc_fn_0(t_bc_0, y_bc_0, x_bc_0, v_bc_0_true, u_bc_0_true) #loss for left, right, bottom wall boundary condition
+    loss_bc_1 = bc_fn_1(x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true) #loss for top wall boundary condition
     loss_bc = loss_bc_1 + loss_bc_0
     
     mse_x = loss_function(residual_x, torch.zeros_like(residual_x)) #loss for x-momentum
@@ -184,22 +208,42 @@ def total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc):
 
 loss_history = [] #stored list of loss values
 
+#using Curriculum training approach
 for epoch in range (epochs):
-    optimizer.zero_grad() #set gradients to zero
-    
-    total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
-    total_loss.backward(retain_graph=True) #backpropagation
-    optimizer.step() #update weights
+    if epoch < 2000: #first 2000 epochs only training with boundary and initial conditions for better model learning
+        optimizer.zero_grad() #set gradients to zero
 
-    nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 0.0, 0.0, 0.0, 10.0, 20.0
 
-    learning_rate_scheduler.step(total_loss) #update learning rate based on loss
-    loss_history.append(total_loss.item()) #store loss value in list
-    learning_rate_scheduler.get_last_lr()[0]
-    
-    if epoch % 500 == 0:
-        print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f} Loss % decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%')
-        print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
+        bc_ic_loss = bc_ic_loss_function(lambda_ic, lambda_bc)[0] #calculate boundary and initial conditions loss
+        bc_ic_loss.backward(retain_graph=True) #backpropagation
+        optimizer.step() #update weights
+
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
+
+        loss_history.append(bc_ic_loss.item()) #storing bc and ic loss value in list
+
+        if epoch % 500 == 0:
+            print(f'Boundary condition loss at epoch {epoch} : {bc_ic_loss_function(lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {bc_ic_loss_function(lambda_ic, lambda_bc)[2]:.6f}')
+
+    else:
+        optimizer.zero_grad() #set gradients to zero
+        
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 1.0, 1.0
+
+        total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
+        total_loss.backward(retain_graph=True) #backpropagation
+        optimizer.step() #update weights
+
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1) #adding a gradient clipping to avoid exploiding gradients changing weights too much in one step
+
+        learning_rate_scheduler.step(total_loss) #update learning rate based on loss
+        loss_history.append(total_loss.item()) #store loss value in list
+        learning_rate_scheduler.get_last_lr()[0]
+        
+        if epoch % 500 == 0:
+            print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f} Loss % decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%')
+            print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
     
 print(f"Loss at epoch {epoch} : {loss_history[-1]} and % Loss decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%")
 
