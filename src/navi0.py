@@ -39,7 +39,7 @@ class NN(nn.Module):
 model = NN(input_size=3, output_size=3, hidden_layers=4, neurons_per_layer=30).to(device)
 
 epochs = 10000
-collocation_points = 100000
+collocation_points = 10000
 learning_rate = 0.0001
 
 re = 400  #Reynolds number
@@ -195,7 +195,7 @@ loss_history = [] #stored list of loss values
 
 #using Curriculum training approach
 for epoch in range (epochs):
-    if epoch < 1000: #first 1000 epochs only training with collocation points for better model learning
+    if epoch < 1000: #first 2000 epochs only training with boundary and initial conditions for better model learning
         optimizer.zero_grad() #set gradients to zero
 
         lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 10.0, 10.0, 5.0, 0.1, 0.1
@@ -209,7 +209,7 @@ for epoch in range (epochs):
 
         if epoch % 500 == 0:
             print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
-    elif epoch < 3000: #now training with mostly boundary and initial conditions
+    elif epoch < 3000:
         optimizer.zero_grad() #set gradients to zero
 
         lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 5.0, 5.0
@@ -305,4 +305,3 @@ plt.xlabel('Epoch')
 plt.ylabel('Loss (log scale)')
 plt.savefig('loss_curve.png')
 plt.show()
-
