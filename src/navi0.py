@@ -18,11 +18,11 @@ class NN(nn.Module):
         self.layers = nn.ModuleList()
 
         self.layers.append(nn.Linear(input_size, neurons_per_layer))
-        self.layers.append(nn.SiLU())
+        self.layers.append(nn.Tanh())
 
         for _ in range (hidden_layers - 1):
             self.layers.append(nn.Linear(neurons_per_layer, neurons_per_layer))
-            self.layers.append(nn.SiLU())
+            self.layers.append(nn.Tanh())
         
         self.layers.append(nn.Linear(neurons_per_layer, output_size))
 
@@ -36,23 +36,23 @@ class NN(nn.Module):
         return u, v, p
 
 #hyperparameters settings
-model = NN(input_size=3, output_size=3, hidden_layers=4, neurons_per_layer=30).to(device)
+model = NN(input_size=3, output_size=3, hidden_layers=5, neurons_per_layer=79).to(device)
 
 epochs = 10000
 collocation_points = 10000
 learning_rate = 0.0001
 
-re = 400  #Reynolds number
+re = 100  #Reynolds number
 g_x = 0.0 #external force in x direction
 g_y = 0.0 #external force in y direction
 
 loss_function = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), learning_rate)
-learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=200, factor=0.2)
+learning_rate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10000, eta_min=0)
 
-lambda_x = 5.0 #x-momentum loss weight
-lambda_y = 5.0 #y-momentum loss weight
-lambda_c = 3.0 #continuity equation loss weight
+lambda_x = 50.0 #x-momentum loss weight
+lambda_y = 50.0 #y-momentum loss weight
+lambda_c = 30.0 #continuity equation loss weight
 lambda_ic = 2.0 #initial condition loss weight
 lambda_bc = 2.0  #boundary condition loss weight
 
@@ -198,7 +198,7 @@ for epoch in range (epochs):
     if epoch < 1000: #first 2000 epochs only training with boundary and initial conditions for better model learning
         optimizer.zero_grad() #set gradients to zero
 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 10.0, 10.0, 5.0, 0.1, 0.1
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 50.0, 0.1, 0.1
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
@@ -212,7 +212,7 @@ for epoch in range (epochs):
     elif epoch < 3000:
         optimizer.zero_grad() #set gradients to zero
 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 5.0, 5.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 25.0, 25.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
@@ -226,7 +226,7 @@ for epoch in range (epochs):
     else:
         optimizer.zero_grad() #set gradients to zero
         
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 2.0, 2.0, 1.0, 2.0, 2.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 30.0, 2.0, 2.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
