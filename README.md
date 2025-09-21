@@ -9,4 +9,4 @@ This repository is under active development.
 
 For solving we took, initial condition as u(x,0) = f(x) where f(x) is initial state of system so we took f(x) as -sin(pi*x) & Dirichlet boundary condition for Burgers' equation AND lid cavity experiment conditions for Navier-Stokes Equation.
 
-The code for solving the 1D Viscous Burger's and Navier-Stokes Equation is now available in the `src/` directory.
+The code for solving the Viscous Burger's and Navier-Stokes Equation is now available in the `src/` directory.
