@@ -1,5 +1,5 @@
 # Physics-Informed Neural Networks for Fluid Dynamics
-A comparative study of Physics-Informed Neural Networks (PINNs) for solving Viscous Burgers' equation and incompressible 2-D Navier-Stokes equations. Analyzing performance, convergence, and limitations.
+A comparative study of Physics-Informed Neural Networks (PINNs) for solving Viscous Burgers' equation and incompressible Navier-Stokes 2-D equations. Analyzing performance, convergence, and limitations.
 
 ## Currently In Progress 
 This repository is under active development.
