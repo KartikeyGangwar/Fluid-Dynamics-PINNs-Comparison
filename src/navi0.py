@@ -47,8 +47,21 @@ g_x = 0.0 #external force in x direction
 g_y = 0.0 #external force in y direction
 
 loss_function = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), learning_rate)
-learning_rate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10000, eta_min=0)
+optimizer_adam = torch.optim.Adam(model.parameters(), learning_rate) #using adam optimizer
+
+learning_rate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer_adam, T_max=9500, eta_min=0) #using CosineAnnealingLR learning rate scheduler only for 9500 epochs
+
+optimizer_lbfgs = torch.optim.LBFGS(  #using lbfgs optimizer
+    model.parameters(), 
+    lr=0.1, 
+    max_iter=20, 
+    max_eval=25,
+    tolerance_grad=1e-7,
+    tolerance_change=1e-9,
+    history_size=50,
+    line_search_fn='strong_wolfe'
+)
 
 lambda_x = 50.0 #x-momentum loss weight
 lambda_y = 50.0 #y-momentum loss weight
@@ -196,50 +209,72 @@ loss_history = [] #stored list of loss values
 #using Curriculum training approach
 for epoch in range (epochs):
     if epoch < 1000: #first 2000 epochs only training with boundary and initial conditions for better model learning
-        optimizer.zero_grad() #set gradients to zero
+        optimizer_adam.zero_grad() #set gradients to zero
 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 50.0, 0.1, 0.1
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 3.0, 3.0, 3.0, 50.0, 50.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
-        optimizer.step() #update weights
+        optimizer_adam.step() #update weights
 
-        learning_rate_scheduler.step(total_loss)
+        learning_rate_scheduler.step()
         loss_history.append(total_loss.item()) #store loss value in list
 
         if epoch % 500 == 0:
             print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
     elif epoch < 3000:
-        optimizer.zero_grad() #set gradients to zero
+        optimizer_adam.zero_grad() #set gradients to zero
 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 25.0, 25.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 15.0, 15.0, 10.0, 20.0, 20.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
-        optimizer.step() #update weights
+        optimizer_adam.step() #update weights
 
-        learning_rate_scheduler.step(total_loss)
+        learning_rate_scheduler.step()
         loss_history.append(total_loss.item()) #store loss value in list
 
         if epoch % 500 == 0:
             print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
-    else:
-        optimizer.zero_grad() #set gradients to zero
+    elif epoch < 9500:
+        optimizer_adam.zero_grad() #set gradients to zero
         
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 30.0, 2.0, 2.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 60.0, 60.0, 45.0, 3.0, 3.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
-        optimizer.step() #update weights
+        optimizer_adam.step() #update weights
 
-        learning_rate_scheduler.step(total_loss) #update learning rate based on loss
+        learning_rate_scheduler.step() #update learning rate based on loss
         loss_history.append(total_loss.item()) #store loss value in list
-        learning_rate_scheduler.get_last_lr()[0]
         
         if epoch % 500 == 0:
+            learning_rate_scheduler.get_last_lr()[0]
             print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f}')
             print(f'Boundary condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[1]:.6f} and Initial condition loss at epoch {epoch} : {total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[2]:.6f}')
     
+    
+    
+    else:       #using lbfgs optimizer for last 500 epochs
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 70.0, 70.0, 40.0, 0.5, 0.5
+        def closure():
+            optimizer_lbfgs.zero_grad()
+            total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0]
+            total_loss.backward(retain_graph=True)
+            return total_loss
+        
+        total_loss = optimizer_lbfgs.step(closure)
+        loss_history.append(total_loss.item())
+        
+        if (epoch - 9500) % 50 == 0:
+            print(f'LBFGS Epoch {epoch}: Loss: {total_loss.item():.6f}')
+    
+print(f"Final Loss: {loss_history[-1]:.6f}")
+
+
+
+
+
 print(f"Loss at epoch {epoch} : {loss_history[-1]} and % Loss decrease : {(loss_history[0]-loss_history[-1]/loss_history[0])*100:.2f}%")
 
 
