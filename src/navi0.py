@@ -225,7 +225,7 @@ for epoch in range (epochs):
     elif epoch < 3000:
         optimizer_adam.zero_grad() #set gradients to zero
 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 15.0, 15.0, 10.0, 20.0, 20.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 15.0, 15.0, 10.0, 25.0, 25.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
@@ -239,7 +239,7 @@ for epoch in range (epochs):
     elif epoch < 9500:
         optimizer_adam.zero_grad() #set gradients to zero
         
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 60.0, 60.0, 45.0, 3.0, 3.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 60.0, 60.0, 45.0, 30.0, 25.0
 
         total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0] #calculate total loss
         total_loss.backward(retain_graph=True) #backpropagation
@@ -256,7 +256,7 @@ for epoch in range (epochs):
     
     
     else:       #using lbfgs optimizer for last 500 epochs
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 70.0, 70.0, 40.0, 0.5, 0.5
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 70.0, 70.0, 40.0, 35.0, 25.0
         def closure():
             optimizer_lbfgs.zero_grad()
             total_loss = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc)[0]
