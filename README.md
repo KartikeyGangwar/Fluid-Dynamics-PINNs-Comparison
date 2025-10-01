@@ -15,5 +15,5 @@ For The Navier-Stokes Equation with lid cavity driven conditions struggle persis
 
 Now focusing on adding the vanishing function for boundary condition in forward call for Navier-Stokes eqn. for model to predict values satisfying the BC's before training even happens.
 
-For solving we took, initial condition as u(x,0) = f(x) where f(x) is initial state of system so we took f(x) as -sin(pi*x) & Dirichlet boundary condition for Burgers' equation AND lid cavity driven experiment conditions for Navier-Stokes Equation.
+For solving we took, initial condition as u(x,0) = f(x) where f(x) is initial state of system so we took f(x) as -sin(pi*x) & Dirichlet boundary condition for Burgers' equation AND lid cavity driven experiment conditions for Navier-Stokes Equation. 
 
