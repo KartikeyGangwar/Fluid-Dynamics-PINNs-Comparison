@@ -7,6 +7,7 @@ This repository is under active development.
 *   Phase 2: Navier-Stokes Equation - **COMPLETED** 
 *   Phase 3: Comparative Analysis - In Progress
 
+Results will be uploaded soon in upcoming future.
 The code and results for solving the Viscous Burger's and Navier-Stokes Equation is now available in the `src/` and `results/` directory respectively.
 
 For burgers equation the convergence of loss and the shock wave was obtained after few tuning of hyperparameters for 6 times. Still the loss curve is having the fluctions between 0.1 to 0.01 but its still managable can can be easily refined due to the equation's simplicity, BUT,
