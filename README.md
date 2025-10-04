@@ -13,9 +13,9 @@ The code and results for solving the Viscous Burger's and Navier-Stokes Equation
 
 For burgers equation the convergence of loss and the shock wave was obtained after few tuning of hyperparameters for 6 times. Still the loss curve is having the fluctions between 0.1 to 0.01 but its still managable can can be easily refined due to the equation's simplicity, BUT,
 
-For The Navier-Stokes Equation with lid cavity driven conditions struggle persists, loss converges to 2e-3 after trying 10000 epochs of training each time for 18 times after tuning hyperparameters, using different optimization techniques (Adam + LBFGS) and activation functions, curriculum training approach BUT still the model doesn't shows the good results because the streamlines shows that the model is not following boundary conditions.
+For The Navier-Stokes Equation with lid cavity driven conditions struggle persists, loss converges to 2e-3 after trying 10000 epochs of training each time for 18 times after tuning hyperparameters, using different optimization techniques (Adam + LBFGS) and activation functions, curriculum training approach BUT still the model doesn't shows the accurate results because the streamlines shows that the model is not following boundary conditions.
 
-Now focusing on adding the vanishing function for boundary condition in forward call and adaptive lambda loss weight for Navier-Stokes eqn. for model to predict values satisfying the BC's before training even happens.
+Now focusing on adding the adaptive lambda loss weight and vanishing function for boundary condition in forward call for Navier-Stokes eqn. for model to predict values satisfying the BC's before training even happens.
 
 For solving we took, initial condition as u(x,0) = f(x) where f(x) is initial state of system so we took f(x) as -sin(pi*x) & Dirichlet boundary condition for Burgers' equation AND lid cavity driven experiment conditions for Navier-Stokes Equation. 
 
