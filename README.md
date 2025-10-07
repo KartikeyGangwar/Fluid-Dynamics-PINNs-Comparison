@@ -1,5 +1,6 @@
 # Physics-Informed Neural Networks for Fluid Dynamics
-A comparative study of Physics-Informed Neural Networks (PINNs) for solving 1-D Viscous Burgers' equation and incompressible Navier-Stokes 2-D equations. Analyzing performance, convergence, and limitations.
+Physics-Informed Neural Networks, a powerful framework originally pioneered by Maziar Raissi, Paris Perdikaris, and George Karniadakis in their seminal 2019 Journal of Computational Physics paper.
+In this project we did a comparative study of Physics-Informed Neural Networks (PINNs) for solving 1-D Viscous Burgers' equation and incompressible Navier-Stokes 2-D equations for lid driven cavity conditions. Analyzing performance, convergence, and limitations.
 
 ## Currently In Progress 
 This repository is under active development.
@@ -19,3 +20,4 @@ Now focusing on adding the adaptive lambda loss weight and vanishing function fo
 
 For solving we took, initial condition as u(x,0) = f(x) where f(x) is initial state of system so we took f(x) as -sin(pi*x) & Dirichlet boundary condition for Burgers' equation AND lid cavity driven experiment conditions for Navier-Stokes Equation. 
 
+Now we are going to impliment multi fidelity on this model for better results and making it more effective for training cost.
