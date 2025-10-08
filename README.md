@@ -1,5 +1,6 @@
 # Physics-Informed Neural Networks for Fluid Dynamics
 Physics-Informed Neural Networks, a powerful framework originally pioneered by Maziar Raissi, Paris Perdikaris, and George Karniadakis in their seminal 2019 Journal of Computational Physics paper.
+
 In this project we did a comparative study of Physics-Informed Neural Networks (PINNs) for solving 1-D Viscous Burgers' equation and incompressible Navier-Stokes 2-D equations for lid driven cavity conditions. Analyzing performance, convergence, and limitations.
 
 ## Currently In Progress 
@@ -8,9 +9,9 @@ This repository is under active development.
 *   Phase 2: Navier-Stokes Equation - **COMPLETED** 
 *   Phase 3: Comparative Analysis - In Progress
 
-Results will be uploaded soon in upcoming future.
+jupiter workbook and Results will be uploaded soon in upcoming future.
 
-The code and results for solving the Viscous Burger's and Navier-Stokes Equation is now available in the `src/` and `results/` directory respectively.
+The code and results for solving the Viscous Burger's and Navier-Stokes Equation is now available in the `src/` and `results/` directory respectively, with jupiter workbook in `src/ipynb`.
 
 For burgers equation the convergence of loss and the shock wave was obtained after few tuning of hyperparameters for 6 times. Still the loss curve is having the fluctions between 0.1 to 0.01 but its still managable can can be easily refined due to the equation's simplicity, BUT,
 
@@ -21,3 +22,5 @@ Now focusing on adding the adaptive lambda loss weight and vanishing function fo
 For solving we took, initial condition as u(x,0) = f(x) where f(x) is initial state of system so we took f(x) as -sin(pi*x) & Dirichlet boundary condition for Burgers' equation AND lid cavity driven experiment conditions for Navier-Stokes Equation. 
 
 Now we are going to impliment multi fidelity on this model for better results and making it more effective for training cost.
+
+Code for SF and MF both will be available in directory.
