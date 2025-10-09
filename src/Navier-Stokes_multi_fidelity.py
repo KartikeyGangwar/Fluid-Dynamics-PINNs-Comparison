@@ -99,7 +99,6 @@ high_fidelity_collocation_points = 8000
 
 # Define loss function and optimizers
 loss_function = nn.MSELoss()
-learning_rate = 0.0001
 
 # Separate optimizers and schedulers for each model if needed, or reinitialize
 # for simplicity, we will reinitialize for each training phase here.
@@ -241,9 +240,11 @@ model = low_fidility_model
 epochs = low_fidelity_epochs
 collocation_points = low_fidelity_collocation_points
 
+learning_rate = 0.001
+
 optimizer_adam = torch.optim.Adam(model.parameters(), learning_rate)
 # Using CosineAnnealingLR for low fidelity training
-learning_rate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_adam, T_max=epochs)
+learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_adam, mode='min', factor=0.5, patience=100)
 
 
 # collocation points dataset for low fidelity
@@ -257,53 +258,56 @@ for epoch in range (epochs):
     optimizer_adam.zero_grad()
 
     # Adjust lambdas based on curriculum learning
-    if epoch < (epochs/5): #first 20% epochs only training with boundary and initial conditions for better model learning
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 3.0, 3.0, 3.0, 50.0, 50.0
-    elif epoch < ((0.3)*epochs): # less then 30% epochs training
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 15.0, 15.0, 10.0, 25.0, 25.0
-    elif epoch < ((0.95)*epochs): # less then 95% epochs
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 60.0, 60.0, 45.0, 30.0, 25.0
-    else:       #using lbfgs optimizer for last 95% epochs (Note: L-BFGS requires a closure function)
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 70.0, 70.0, 40.0, 35.0, 25.0
-
-        # L-BFGS optimizer setup for the end of training
-        optimizer_lbfgs = torch.optim.LBFGS(
-            model.parameters(),
-            lr=0.1,
-            max_iter=20,
-            max_eval=25,
-            tolerance_grad=1e-7,
-            tolerance_change=1e-9,
-            history_size=50,
-            line_search_fn='strong_wolfe'
-        )
-
-        def closure():
-            optimizer_lbfgs.zero_grad()
-            total_loss, _, _ = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
-            total_loss.backward(retain_graph=True)
-            return total_loss
-
-        total_loss = optimizer_lbfgs.step(closure)
-        loss_history_low.append(total_loss.item())
-
-        if (epoch - ((0.95)*epochs)) % 50 == 0:
-             print(f'LBFGS Epoch {epoch}: Loss: {total_loss.item():.6f}') # LR not directly available from L-BFGS step
-
-        continue # Skip Adam step and scheduler update in L-BFGS phase
-
-
+    if epoch < (epochs * 0.2):  # First 20% 
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 100.0, 100.0
+    elif epoch < (epochs * 0.5):  # Next 30% 
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 10.0, 10.0, 10.0, 50.0, 50.0
+    elif epoch < (epochs * 0.9):  # Next 40% 
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 30.0, 20.0, 20.0
+    else:  # Last 10% 
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 100.0, 100.0, 50.0, 10.0, 10.0
+        
     total_loss, loss_bc, loss_ic = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
+        
     total_loss.backward(retain_graph=True)
     optimizer_adam.step()
+    learning_rate_scheduler.step(total_loss)
+    loss_history_low.append(total_loss.item())
+        
+    if epoch % 200 == 0:
+        lr = optimizer_adam.param_groups[0]['lr']
+        print(f'Adam Epoch {epoch}: Loss: {total_loss.item():.6f}, BC: {loss_bc.item():.6f}, LR: {lr:.2e}')
 
-    learning_rate_scheduler.step() # CosineAnnealingLR does not need the loss in step()
+# Phase 2: L-BFGS fine-tuning
+# L-BFGS optimizer setup for the end of training
+
+print(f"** L-BFGS Fine-tuning for low fidility model **")
+optimizer_lbfgs = torch.optim.LBFGS(
+    model.parameters(),
+    lr=0.8,
+    max_iter=100,
+    max_eval=150,
+    tolerance_grad=1e-10,
+    tolerance_change=1e-12,
+    history_size=150,
+    line_search_fn='strong_wolfe'
+)
+
+lbsgs_epochs = 100  # Number of L-BFGS epochs
+
+for epoch in range(lbsgs_epochs):
+    def closure():
+        optimizer_lbfgs.zero_grad()
+        total_loss, _, _ = total_loss_function(200.0, 200.0, 100.0, 50.0, 50.0, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
+        total_loss.backward(retain_graph=True)
+        return total_loss
+
+    total_loss = optimizer_lbfgs.step(closure)
     loss_history_low.append(total_loss.item())
 
-    if epoch % 200 == 0:
-        learning_rate = optimizer_adam.param_groups[0]['lr'] # Get current LR from Adam optimizer
-        print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f}')
-        print(f'Boundary condition loss at epoch {epoch} : {loss_bc.item():.6f} and Initial condition loss at epoch {epoch} : {loss_ic.item():.6f}')
+    if epoch % 20 == 0:
+        print(f'L-BFGS Epoch {epoch}: Loss: {total_loss.item():.6f}')
+
 
 print(f"Final Loss (Low Fidelity): {loss_history_low[-1]:.6f}")
 if len(loss_history_low) > 1:
@@ -316,9 +320,11 @@ model = high_fidility_model
 epochs = high_fidelity_epochs
 collocation_points = high_fidelity_collocation_points
 
+learning_rate = 0.001
+
 optimizer_adam = torch.optim.Adam(model.parameters(), learning_rate) # Reinitialize optimizer for high fidelity
 # Using CosineAnnealingLR for high fidelity training
-learning_rate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_adam, T_max=epochs)
+learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_adam, mode='min', factor=0.5, patience=100)
 
 
 # collocation points dataset for high fidelity
@@ -334,54 +340,60 @@ for epoch in range (epochs):
 
     # Adjust lambdas based on curriculum learning
     if epoch < (epochs/5): #first 20% epochs only training with boundary and initial conditions for better model learning
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 3.0, 3.0, 3.0, 50.0, 50.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 200.0, 200.0
     elif epoch < ((0.3)*epochs): # less then 30% epochs training
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 15.0, 15.0, 10.0, 25.0, 25.0
-    elif epoch < ((0.95)*epochs): # less then 95% epochs
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 60.0, 60.0, 45.0, 30.0, 25.0
-    else:       #using lbfgs optimizer for last 95% epochs (Note: L-BFGS requires a closure function)
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 70.0, 70.0, 40.0, 35.0, 25.0
-
-        # L-BFGS optimizer setup for the end of training
-        optimizer_lbfgs = torch.optim.LBFGS(
-            model.parameters(),
-            lr=0.1,
-            max_iter=20,
-            max_eval=25,
-            tolerance_grad=1e-7,
-            tolerance_change=1e-9,
-            history_size=50,
-            line_search_fn='strong_wolfe'
-        )
-
-        def closure():
-            optimizer_lbfgs.zero_grad()
-            total_loss, _, _ = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
-            total_loss.backward(retain_graph=True)
-            return total_loss
-
-        total_loss = optimizer_lbfgs.step(closure)
-        loss_history_high.append(total_loss.item())
-
-        if (epoch - ((0.95)*epochs)) % 50 == 0:
-            print(f'LBFGS Epoch {epoch}: Loss: {total_loss.item():.6f}') # LR not directly available from L-BFGS step
-        continue # Skip Adam step and scheduler update in L-BFGS phase
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 5.0, 5.0, 5.0, 100.0, 100.0
+    elif epoch < ((0.6)*epochs): # less then 60% epochs
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 20.0, 20.0, 15.0, 50.0, 50.0
+    elif epoch < ((0.9)*epochs): # less then 90% epochs
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 100.0, 100.0, 50.0, 20.0, 20.0
+    else:  # Last 10%
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 200.0, 200.0, 100.0, 10.0, 10.0
 
     total_loss, loss_bc, loss_ic = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
+
     total_loss.backward(retain_graph=True)
     optimizer_adam.step()
+    learning_rate_scheduler.step(total_loss)
+    loss_history_high.append(total_loss.item())
+        
+    if epoch % 200 == 0:
+        lr = optimizer_adam.param_groups[0]['lr']
+        print(f'Adam Epoch {epoch}: Loss: {total_loss.item():.6f}, BC: {loss_bc.item():.6f}, LR: {lr:.2e}')
 
-    learning_rate_scheduler.step() # CosineAnnealingLR does not need the loss in step()
+# Phase 2: L-BFGS fine-tuning
+# L-BFGS optimizer setup for the end of training
+
+print(f"** L-BFGS Fine-tuning for high fidility model **")
+optimizer_lbfgs = torch.optim.LBFGS(
+    model.parameters(),
+    lr=0.8,
+    max_iter=100,
+    max_eval=150,
+    tolerance_grad=1e-10,
+    tolerance_change=1e-12,
+    history_size=150,
+    line_search_fn='strong_wolfe'
+)
+
+lbsgs_epochs = 120  # Number of L-BFGS epochs
+
+for epoch in range(lbsgs_epochs):
+    def closure():
+        optimizer_lbfgs.zero_grad()
+        total_loss, _, _ = total_loss_function(300.0, 300.0, 150.0, 50.0, 50.0, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
+        total_loss.backward(retain_graph=True)
+        return total_loss
+
+    total_loss = optimizer_lbfgs.step(closure)
     loss_history_high.append(total_loss.item())
 
-    if epoch % 200 == 0:
-        learning_rate = optimizer_adam.param_groups[0]['lr'] # Get current LR from Adam optimizer
-        print(f'Loss at epoch {epoch} : {total_loss.item():.6f}, LR : {learning_rate:.6f}')
-        print(f'Boundary condition loss at epoch {epoch} : {loss_bc.item():.6f} and Initial condition loss at epoch {epoch} : {loss_ic.item():.6f}')
+    if epoch % 20 == 0:
+        print(f'L-BFGS Epoch {epoch}: Loss: {total_loss.item():.6f}')
 
-print(f"Final Loss (High Fidelity): {loss_history_high[-1]:.6f}")
-if len(loss_history_high) > 1:
-  print(f"Loss at epoch {epochs-1} : {loss_history_high[-1]} and % Loss decrease : {((loss_history_high[0]-loss_history_high[-1])/loss_history_high[0])*100:.2f}%")
+print(f"Final Loss (High Fidelity): {loss_history_low[-1]:.6f}")
+if len(loss_history_low) > 1:
+  print(f"Loss at epoch {epochs-1} : {loss_history_low[-1]} and % Loss decrease : {((loss_history_low[0]-loss_history_low[-1])/loss_history_low[0])*100:.2f}%")
 
 
 # Training correction model
@@ -408,7 +420,7 @@ for corr_epoch in range(correction_epochs):
 
     #corrections loss function
     loss = torch.mean(u_c**2 + v_c**2 + p_c**2)
-    loss.backward()
+    loss.backward(retain_graph=True)
     correction_optimizer.step()
     loss_history_correction.append(loss.item())
 
