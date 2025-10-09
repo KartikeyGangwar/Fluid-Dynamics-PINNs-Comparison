@@ -3,8 +3,6 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
 
-torch.autograd.set_detect_anomaly(True)
-
 #using GPU if available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'Using device : {device}')
@@ -72,14 +70,14 @@ class MultiFidelityNN(nn.Module):
         u_c, v_c, p_c = self.correction_model(x, y, t, u_l, v_l, p_l) #correction model output
 
         #weighting factor between 0 and 1 using sigmoid activation function
-        w_u = torch.sigmoid(u_c) #weight for velocity in x direction
-        w_v = torch.sigmoid(v_c) #weight for velocity in y direction
-        w_p = torch.sigmoid(p_c) #weight for pressure
+        w_u = torch.sigmoid(u_c*10) #weight for velocity in x direction
+        w_v = torch.sigmoid(v_c*10) #weight for velocity in y direction
+        w_p = torch.sigmoid(p_c*10) #weight for pressure
 
         u = w_u*u_l + (1-w_u)*u_h  #corrected velocity in x direction
         v = w_v*v_l + (1-w_v)*v_h  #corrected velocity in y direction
         p = w_p*p_l + (1-w_p)*p_h  #corrected pressure
-
+        
         return u, v, p
 
 #hyperparameters settings
@@ -259,17 +257,18 @@ for epoch in range (epochs):
 
     # Adjust lambdas based on curriculum learning
     if epoch < (epochs * 0.2):  # First 20% 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 100.0, 100.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 500.0, 500.0
     elif epoch < (epochs * 0.5):  # Next 30% 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 10.0, 10.0, 10.0, 50.0, 50.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 10.0, 10.0, 10.0, 100.0, 100.0
     elif epoch < (epochs * 0.9):  # Next 40% 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 30.0, 20.0, 20.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 30.0, 50.0, 50.0
     else:  # Last 10% 
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 100.0, 100.0, 50.0, 10.0, 10.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 100.0, 100.0, 50.0, 20.0, 20.0
         
     total_loss, loss_bc, loss_ic = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
         
     total_loss.backward(retain_graph=True)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer_adam.step()
     learning_rate_scheduler.step(total_loss)
     loss_history_low.append(total_loss.item())
@@ -340,19 +339,20 @@ for epoch in range (epochs):
 
     # Adjust lambdas based on curriculum learning
     if epoch < (epochs/5): #first 20% epochs only training with boundary and initial conditions for better model learning
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 200.0, 200.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 500.0, 500.0
     elif epoch < ((0.3)*epochs): # less then 30% epochs training
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 5.0, 5.0, 5.0, 100.0, 100.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 5.0, 5.0, 5.0, 200.0, 200.0
     elif epoch < ((0.6)*epochs): # less then 60% epochs
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 20.0, 20.0, 15.0, 50.0, 50.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 20.0, 20.0, 15.0, 100.0, 100.0
     elif epoch < ((0.9)*epochs): # less then 90% epochs
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 100.0, 100.0, 50.0, 20.0, 20.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 100.0, 100.0, 50.0, 50.0, 50.0
     else:  # Last 10%
-        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 200.0, 200.0, 100.0, 10.0, 10.0
+        lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 200.0, 200.0, 100.0, 20.0, 20.0
 
     total_loss, loss_bc, loss_ic = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
 
     total_loss.backward(retain_graph=True)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer_adam.step()
     learning_rate_scheduler.step(total_loss)
     loss_history_high.append(total_loss.item())
@@ -381,7 +381,7 @@ lbsgs_epochs = 120  # Number of L-BFGS epochs
 for epoch in range(lbsgs_epochs):
     def closure():
         optimizer_lbfgs.zero_grad()
-        total_loss, _, _ = total_loss_function(300.0, 300.0, 150.0, 50.0, 50.0, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
+        total_loss, _, _ = total_loss_function(300.0, 300.0, 150.0, 100.0, 100.0, x_n, y_n, t_n, x_ic, y_ic, t_ic, u_ic_true, v_ic_true, x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
         total_loss.backward(retain_graph=True)
         return total_loss
 
@@ -391,15 +391,16 @@ for epoch in range(lbsgs_epochs):
     if epoch % 20 == 0:
         print(f'L-BFGS Epoch {epoch}: Loss: {total_loss.item():.6f}')
 
-print(f"Final Loss (High Fidelity): {loss_history_low[-1]:.6f}")
-if len(loss_history_low) > 1:
-  print(f"Loss at epoch {epochs-1} : {loss_history_low[-1]} and % Loss decrease : {((loss_history_low[0]-loss_history_low[-1])/loss_history_low[0])*100:.2f}%")
+print(f"Final Loss (High Fidelity): {loss_history_high[-1]:.6f}")
+if len(loss_history_high) > 1:
+  print(f"Loss at epoch {epochs-1} : {loss_history_high[-1]} and % Loss decrease : {((loss_history_high[0]-loss_history_high[-1])/loss_history_high[0])*100:.2f}%")
 
 
 # Training correction model
 print("\n** Training correction model **")
-correction_epochs = 3000
-correction_optimizer = torch.optim.Adam(correction_model.parameters(), lr=0.001)
+model = correction_model
+correction_epochs = 5000
+correction_optimizer = torch.optim.Adam(model.parameters(), lr=0.0007)
 
 loss_history_correction = [] # stored list of loss values for correction model
 
@@ -407,20 +408,31 @@ for corr_epoch in range(correction_epochs):
     correction_optimizer.zero_grad()
 
     #sample points
-    x_corr = torch.rand(1000, 1, requires_grad=True, device=device)*2 - 1
-    y_corr = torch.rand(1000, 1, requires_grad=True, device=device)*2 - 1
-    t_corr = torch.rand(1000, 1, requires_grad=True, device=device)
+    x_corr = torch.rand(2000, 1, requires_grad=True, device=device)*2 - 1
+    y_corr = torch.rand(2000, 1, requires_grad=True, device=device)*2 - 1
+    t_corr = torch.rand(2000, 1, requires_grad=True, device=device)
 
-    #get low fidelity predictions
+    #get low and high fidelity model predictions
     with torch.no_grad():
         u_l, v_l, p_l = low_fidility_model(x_corr, y_corr, t_corr)
+        u_h, v_h, p_h = high_fidility_model(x_corr, y_corr, t_corr)
 
     #calling correction to output small corrections
     u_c, v_c, p_c = correction_model(x_corr, y_corr, t_corr, u_l, v_l, p_l)
 
-    #corrections loss function
-    loss = torch.mean(u_c**2 + v_c**2 + p_c**2)
+    #weighting factor between 0 and 1 using tanh activation function
+    w_u = torch.sigmoid(u_c*10) #weight for velocity in x direction
+    w_v = torch.sigmoid(v_c*10) #weight for velocity in y direction
+    w_p = torch.sigmoid(p_c*10) #weight for pressure
+
+    u = w_u*u_l + (1-w_u)*u_h  #corrected velocity in x direction
+    v = w_v*v_l + (1-w_v)*v_h  #corrected velocity in y direction
+    p = w_p*p_l + (1-w_p)*p_h  #corrected pressure
+
+    loss = (torch.mean((u - u_h)**2) + torch.mean((v - v_h)**2) + torch.mean((p - p_h)**2))
+
     loss.backward(retain_graph=True)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     correction_optimizer.step()
     loss_history_correction.append(loss.item())
 
@@ -431,6 +443,51 @@ for corr_epoch in range(correction_epochs):
 print(f"Final Loss (Correction): {loss_history_correction[-1]:.6f}")
 if len(loss_history_correction) > 1:
     print(f"Loss at epoch {correction_epochs-1} : {loss_history_correction[-1]} and % Loss decrease : {((loss_history_correction[0]-loss_history_correction[-1])/loss_history_correction[0])*100:.2f}%")
+
+
+#Training multi-fidility model as a whole
+print(f"** Training multi-fidility model **")
+model = MultiFidelity
+final_optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
+loss_history_multi = [] #stored list of loss values for multi-fidility model
+epochs_multi = 3000
+
+# Using ReduceLROnPlateau for multi-fidility training
+learning_rate_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(final_optimizer, mode='min', factor=0.5, patience=100)
+
+for epoch in range(epochs_multi):
+  final_optimizer.zero_grad()
+
+  #sample points
+  x_final = torch.rand(1771, 1, requires_grad=True, device=device)*2 - 1
+  y_final = torch.rand(1771, 1, requires_grad=True, device=device)*2 - 1
+  t_final = torch.rand(1771, 1, requires_grad=True, device=device)
+
+  if epoch < (epochs_multi * 0.3):  #first 30%
+      lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 1.0, 1.0, 1.0, 1000.0, 1000.0
+  elif epoch < (epochs_multi * 0.7):  #next 40%
+      lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 50.0, 50.0, 30.0, 500.0, 500.0
+  else:  #last 30%
+      lambda_x, lambda_y, lambda_c, lambda_bc, lambda_ic = 200.0, 200.0, 100.0, 200.0, 200.0
+
+  # Compute total loss on FINAL output
+  total_loss, loss_bc, loss_ic = total_loss_function(lambda_x, lambda_y, lambda_c, lambda_ic, lambda_bc,
+                                                     x_final, y_final, t_final, x_ic, y_ic, t_ic, u_ic_true, v_ic_true,
+                                                     x_bc_0, y_bc_0, t_bc_0, u_bc_0_true, v_bc_0_true, x_bc_top, 
+                                                     y_bc_top, t_bc_top, u_bc_1_true, v_bc_1_true, re, g_x, g_y, model)
+  
+  total_loss.backward(retain_graph=True)
+  torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+  final_optimizer.step()
+  learning_rate_scheduler.step(total_loss)
+  loss_history_multi.append(total_loss.item())
+
+  if epoch % 500 == 0:
+        print(f'MultiFidelity training epoch {epoch}: Loss = {total_loss.item():.6f}')
+
+print(f"Final Loss (Multi-Fidility): {loss_history_multi[-1]:.6f}")
+if len(loss_history_multi) > 1:
+    print(f"Loss at epoch {epochs_multi-1} : {loss_history_multi[-1]} and % Loss decrease : {((loss_history_multi[0]-loss_history_multi[-1])/loss_history_multi[0])*100:.2f}%")
 
 
 ###### visualization #####
@@ -490,6 +547,7 @@ plt.figure()
 plt.plot(loss_history_low, label='Low Fidelity')
 plt.plot(loss_history_high, label='High Fidelity')
 plt.plot(loss_history_correction, label='Correction')
+plt.plot(loss_history_multi, label='Multi-Fidelity')
 plt.yscale('log')
 plt.title('Training Loss Curves')
 plt.xlabel('Epoch')
